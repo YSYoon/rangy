@@ -6,7 +6,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     s.test("Editable tests", function(t) {
         var testDiv = document.getElementById("test");
         document.getElementById("test").innerHTML = '<div>One<div contenteditable="true">Two<span contenteditable="false">three</span></div></div>';
-        var util = rangy.CssClassApplier.util;
+        var util = rangy.ClassApplier.util;
 
         var container = testDiv.firstChild;
         t.assertFalse(util.isEditingHost(container));
@@ -40,7 +40,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("isAppliedToRange tests", function(t) {
-        var applier = rangy.createCssClassApplier("test");
+        var applier = rangy.createClassApplier("test");
 
         var testEl = document.getElementById("test");
         testEl.innerHTML = 'Test <span id="one" class="test">One</span> x <span id="two" class="test">Two <span id="three">Three</span> two</span> test';
@@ -80,7 +80,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("toggleRange simple test 1", function(t) {
-        var applier = rangy.createCssClassApplier("test", true);
+        var applier = rangy.createClassApplier("test", true);
         var testEl = document.getElementById("test");
         testEl.innerHTML = 'Test <span id="one" class="test">One</span> test';
         var oneEl = document.getElementById("one");
@@ -109,7 +109,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("toggleRange simple test 2", function(t) {
-        var applier = rangy.createCssClassApplier("test", true);
+        var applier = rangy.createClassApplier("test", true);
         var testEl = document.getElementById("test");
         testEl.innerHTML = 'Test <span id="one" class="test other">One</span> test';
         var oneEl = document.getElementById("one");
@@ -138,7 +138,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("toggleRange nested in other class test", function(t) {
-        var applier = rangy.createCssClassApplier("test", true);
+        var applier = rangy.createClassApplier("test", true);
         var testEl = document.getElementById("test");
         testEl.innerHTML = 'Before <span id="one" class="other">One</span> after';
         var oneEl = document.getElementById("one");
@@ -160,7 +160,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("toggleRange range inside class test", function(t) {
-        var applier = rangy.createCssClassApplier("test", true);
+        var applier = rangy.createClassApplier("test", true);
         var testEl = document.getElementById("test");
         testEl.innerHTML = 'Before <span id="one" class="test">One</span> after';
         var oneEl = document.getElementById("one");
@@ -259,7 +259,13 @@ xn.test.suite("Class Applier module tests", function(s) {
     }
 
     function getSortedClassName(el) {
-        return el.className.split(/\s+/).sort().join(" ");
+        var classNameSupported = (typeof el.className == "string");
+        var elClass = classNameSupported ? el.className : el.getAttribute("class");
+        return elClass ? elClass.split(/\s+/).sort().join(" ") : "";
+    }
+
+    function canHaveChildren(el) {
+        return !/^(area|base|basefont|br|col|frame|hr|img|input|isindex|link|meta|param)$/i.test(el.nodeName);
     }
 
     function htmlAndRangeToString(containerEl, range) {
@@ -271,13 +277,15 @@ xn.test.suite("Class Applier module tests", function(s) {
         function getHtml(node, includeSelf) {
             var html = "", i, len, attr, children;
             if (node.nodeType == 1) {
+                var nodeCanHaveChildren = canHaveChildren(node);
                 if (includeSelf) {
                     html = "<" + node.tagName.toLowerCase();
                     if (node.id) {
                         html += ' id="' + node.id + '"';
                     }
-                    if (node.className) {
-                        html += ' class="' + getSortedClassName(node) + '"';
+                    var sortedClassName = getSortedClassName(node);
+                    if (sortedClassName) {
+                        html += ' class="' + sortedClassName + '"';
                     }
                     if (node.href) {
                         html += ' href="' + node.href + '"';
@@ -289,7 +297,7 @@ xn.test.suite("Class Applier module tests", function(s) {
                             html += ' ' + attr.name + '="' + node.getAttribute(attr.name) + '"';
                         }
                     }
-                    html += ">";
+                    html += !nodeCanHaveChildren? " />" : ">";
                 }
 
                 for (i = 0, children = node.childNodes, len = children.length; i <= len; ++i) {
@@ -304,7 +312,7 @@ xn.test.suite("Class Applier module tests", function(s) {
                     }
                 }
 
-                if (includeSelf) {
+                if (includeSelf && nodeCanHaveChildren) {
                     html += "</" + node.tagName.toLowerCase() + ">";
                 }
             } else if (includeSelf && node.nodeType == 3) {
@@ -348,7 +356,7 @@ xn.test.suite("Class Applier module tests", function(s) {
 
 
     s.test("Test unapply to range spanning two blocks", function(t) {
-        var applier = rangy.createCssClassApplier("c1", true);
+        var applier = rangy.createClassApplier("c1", true);
 
         var testEl = document.getElementById("test");
         var range = createRangeInHtml(testEl, '<p>[One</p><div class="key">Two]</div>');
@@ -364,8 +372,8 @@ xn.test.suite("Class Applier module tests", function(s) {
     Has this test ever passed? I don't think it ever worked this way.
 
     s.test("Test multiple classes", function(t) {
-        var applier1 = rangy.createCssClassApplier("c1"),
-            applier2 = rangy.createCssClassApplier("c2");
+        var applier1 = rangy.createClassApplier("c1"),
+            applier2 = rangy.createClassApplier("c2");
 
         var testEl = document.getElementById("test");
         var range = createRangeInHtml(testEl, "1[234]5");
@@ -381,7 +389,7 @@ xn.test.suite("Class Applier module tests", function(s) {
 */
 
     s.test("Test issue 50 (Mac double click)", function(t) {
-        var applier = rangy.createCssClassApplier("c1");
+        var applier = rangy.createClassApplier("c1");
 
         var testEl = document.getElementById("test");
         var range = createRangeInHtml(testEl, "<b>[one</b>] two");
@@ -391,7 +399,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Test issue 54 (two appliers, apply first then apply second to subrange then toggle first on same range)", function(t) {
-        var applier1 = rangy.createCssClassApplier("c1");
+        var applier1 = rangy.createClassApplier("c1");
 
         var testEl = document.getElementById("test");
         var range = createRangeInHtml(testEl, 'T<span class="c1">h<span class="c2">[r]</span>e</span>e');
@@ -401,7 +409,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Test issue 54 (two appliers, apply first then apply second to subrange then toggle first on same range, more nodes)", function(t) {
-        var applier1 = rangy.createCssClassApplier("c1");
+        var applier1 = rangy.createClassApplier("c1");
 
         var testEl = document.getElementById("test");
         var range = createRangeInHtml(testEl, '<b>One</b> T<span class="c1">h<span class="c2">[r]</span>e</span>e');
@@ -411,7 +419,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Test issue 54 related (last step toggles subrange of subrange)", function(t) {
-        var applier1 = rangy.createCssClassApplier("c1");
+        var applier1 = rangy.createClassApplier("c1");
 
         var testEl = document.getElementById("test");
         var range = createRangeInHtml(testEl, 'T<span class="c1">h<span class="c2">r[r]r</span>e</span>e');
@@ -421,7 +429,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Test issue 57 (isAppliedToRange on empty range)", function(t) {
-        var applier = rangy.createCssClassApplier("c1");
+        var applier = rangy.createClassApplier("c1");
 
         var testEl = document.getElementById("test");
         var range = createRangeInHtml(testEl, '<span class="c1">te[]st</span>');
@@ -432,7 +440,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Test issue 202 (undoToRanges)", function(t) {
-        var applier = rangy.createCssClassApplier("c1");
+        var applier = rangy.createClassApplier("c1");
 
         var testEl = document.getElementById("test");
         testEl.innerHTML = '1<span class="c1">2</span>';
@@ -442,7 +450,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Test whitespace 1 (non-ignorable whitespace)", function(t) {
-        var applier = rangy.createCssClassApplier("c1");
+        var applier = rangy.createClassApplier("c1");
 
         var testEl = document.getElementById("test");
         var range = createRangeInHtml(testEl, 'x[<b>1</b> <i>2</i>]x');
@@ -451,7 +459,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Test whitespace 2 (ignorable whitespace)", function(t) {
-        var applier = rangy.createCssClassApplier("c1");
+        var applier = rangy.createClassApplier("c1");
 
         var testEl = document.getElementById("test");
         var range = createRangeInHtml(testEl, 'x[<p>1</p> <p>2</p>]x');
@@ -460,7 +468,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Test whitespace 3 (ignorable whitespace, ignore option disabled)", function(t) {
-        var applier = rangy.createCssClassApplier("c1", {ignoreWhiteSpace: false});
+        var applier = rangy.createClassApplier("c1", {ignoreWhiteSpace: false});
 
         var testEl = document.getElementById("test");
         var range = createRangeInHtml(testEl, 'x[<p>1</p> <p>2</p>]x');
@@ -469,7 +477,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Test whitespace 4 (pre whitespace between paras)", function(t) {
-        var applier = rangy.createCssClassApplier("c1", {ignoreWhiteSpace: true});
+        var applier = rangy.createClassApplier("c1", {ignoreWhiteSpace: true});
 
         var testEl = document.getElementById("test");
         var range = createRangeInHtml(testEl, 'x[<div style="white-space: pre"><p>1</p> <p>2</p></div>]x');
@@ -478,7 +486,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Test whitespace 5 (normal whitespace between paras)", function(t) {
-        var applier = rangy.createCssClassApplier("c1", {ignoreWhiteSpace: true});
+        var applier = rangy.createClassApplier("c1", {ignoreWhiteSpace: true});
 
         var testEl = document.getElementById("test");
         var range = createRangeInHtml(testEl, 'x[<div style="white-space: normal"><p>1</p> <p>2</p></div>]x');
@@ -487,7 +495,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Test whitespace 6 (pre-line whitespace with no line break between paras)", function(t) {
-        var applier = rangy.createCssClassApplier("c1", {ignoreWhiteSpace: true});
+        var applier = rangy.createClassApplier("c1", {ignoreWhiteSpace: true});
 
         var testEl = document.getElementById("test");
         var range = createRangeInHtml(testEl, 'x[<div style="white-space: pre-line"><p>1</p> <p>2</p></div>]x');
@@ -496,7 +504,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Test whitespace 7 (pre-line whitespace with line break between paras)", function(t) {
-        var applier = rangy.createCssClassApplier("c1", {ignoreWhiteSpace: true});
+        var applier = rangy.createClassApplier("c1", {ignoreWhiteSpace: true});
 
         var testEl = document.getElementById("test");
         var range = createRangeInHtml(testEl, 'x[<div style="white-space: pre-line"><p>1</p>\n<p>2</p></div>]x');
@@ -505,7 +513,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Test link", function(t) {
-        var applier = rangy.createCssClassApplier("c1", {
+        var applier = rangy.createClassApplier("c1", {
             elementTagName: "a",
             elementProperties: {
                 "href": "http://www.google.com/"
@@ -518,8 +526,50 @@ xn.test.suite("Class Applier module tests", function(s) {
         t.assertEquals('t<a class="c1" href="http://www.google.com/">[es]</a>t', htmlAndRangeToString(testEl, range));
     });
 
+    s.test("Test removal of element with elementProperties", function(t) {
+        var applier = rangy.createClassApplier("c1", {
+            elementTagName: "a",
+            elementProperties: {
+                "href": "http://www.google.com/"
+            }
+        });
+
+        var testEl = document.getElementById("test");
+        var range = createRangeInHtml(testEl, '[1<a class="c1" href="http://www.timdown.co.uk/">2</a><span class="c1">3</span><a class="c1" href="http://www.google.com/">4</a>]5');
+        applier.undoToRange(range);
+        t.assertEquals('[1<a href="http://www.timdown.co.uk/">2</a><span class="c1">3</span>4]5', htmlAndRangeToString(testEl, range));
+    });
+
+    s.test("Test removal of element with elementAttributes", function(t) {
+        var applier = rangy.createClassApplier("c1", {
+            elementTagName: "a",
+            elementAttributes: {
+                "href": "http://www.google.com/"
+            }
+        });
+
+        var testEl = document.getElementById("test");
+        var range = createRangeInHtml(testEl, '[1<a class="c1" href="http://www.timdown.co.uk/">2</a><span class="c1">3</span><a class="c1" href="http://www.google.com/">4</a>]5');
+        applier.undoToRange(range);
+        t.assertEquals('[1<a href="http://www.timdown.co.uk/">2</a><span class="c1">3</span>4]5', htmlAndRangeToString(testEl, range));
+    });
+
+    s.test("Test removal of element with elementAttributes and relative URL href", function(t) {
+        var applier = rangy.createClassApplier("c1", {
+            elementTagName: "a",
+            elementAttributes: {
+                "href": "/test"
+            }
+        });
+
+        var testEl = document.getElementById("test");
+        var range = createRangeInHtml(testEl, '[1<a class="c1" href="/test">2</a>3]4');
+        applier.undoToRange(range);
+        t.assertEquals('[123]4', htmlAndRangeToString(testEl, range));
+    });
+
     s.test("Test adding extra class", function(t) {
-        var applier = rangy.createCssClassApplier("c1", {
+        var applier = rangy.createClassApplier("c1", {
             elementProperties: {
                 "className": "extra"
             }
@@ -535,8 +585,34 @@ xn.test.suite("Class Applier module tests", function(s) {
         t.assertEquals('t[es]t', htmlAndRangeToString(testEl, range));
     });
 
+    s.test("Test adding extra class with overlapping containers", function(t) {
+        var applier = rangy.createClassApplier("c1", { elementProperties: { "className": "extra" } });
+        var applier2 = rangy.createClassApplier("c2", { elementProperties: { "className": "extra" } });
+
+        var testEl = document.getElementById("test");
+        var range = createRangeInHtml(testEl, 't[es]t');
+        applier.applyToRange(range);
+        applier2.applyToRange(range);
+        t.assertEquals('t<span class="c1 c2 extra">[es]</span>t', htmlAndRangeToString(testEl, range));
+    });
+
+    s.test("Test toggling extra class with overlapping containers", function(t) {
+        var applier = rangy.createClassApplier("c1", { elementProperties: { "className": "extra" } });
+        var applier2 = rangy.createClassApplier("c2", { elementProperties: { "className": "extra" } });
+
+        var testEl = document.getElementById("test");
+        var range = createRangeInHtml(testEl, 't[es]t');
+        applier.applyToRange(range);
+        applier2.applyToRange(range);
+        applier2.undoToRange(range);
+        t.assertEquals('t<span class="c1 extra">[es]</span>t', htmlAndRangeToString(testEl, range));
+
+        applier.undoToRange(range);
+        t.assertEquals('t[es]t', htmlAndRangeToString(testEl, range));
+    });
+
     s.test("Test range after two toggles", function(t) {
-        var applier1 = rangy.createCssClassApplier("c1");
+        var applier1 = rangy.createClassApplier("c1");
 
         var testEl = document.getElementById("test");
         var range = createRangeInHtml(testEl, 'o[n]e');
@@ -554,7 +630,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Test issue 73 (range ending in element)", function(t) {
-        var applier = rangy.createCssClassApplier("c1");
+        var applier = rangy.createClassApplier("c1");
 
         var testEl = document.getElementById("test");
         testEl.innerHTML = '<span class="c1">one</span>two';
@@ -571,7 +647,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Test issue 101 (adding style properties)", function(t) {
-        var applier = rangy.createCssClassApplier("c1", {
+        var applier = rangy.createClassApplier("c1", {
             elementTagName: "a",
             elementProperties: {
                 href: "http://www.timdown.co.uk/",
@@ -598,7 +674,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Issue 111 (extra option for useExistingElements)", function(t) {
-        var applier = rangy.createCssClassApplier("c1", {
+        var applier = rangy.createClassApplier("c1", {
             useExistingElements: true
         });
 
@@ -609,7 +685,7 @@ xn.test.suite("Class Applier module tests", function(s) {
         applier.undoToRange(range);
         t.assertEquals('x[1<span class="c2">2</span>3]x', htmlAndRangeToString(testEl, range));
 
-        applier = rangy.createCssClassApplier("c1", {
+        applier = rangy.createClassApplier("c1", {
             useExistingElements: false
         });
 
@@ -620,7 +696,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Issue 139 (Merge bug)", function(t) {
-        var applier = rangy.createCssClassApplier("test");
+        var applier = rangy.createClassApplier("test");
         var testEl = document.getElementById("test");
         var range = createRangeInHtml(testEl, '<div><span class="test">[1<span class="test"></span></span> 2]</div>');
         applier.applyToRange(range);
@@ -628,7 +704,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Undo to range with empty span with class", function(t) {
-        var applier = rangy.createCssClassApplier("test");
+        var applier = rangy.createClassApplier("test");
         var testEl = document.getElementById("test");
         var range = createRangeInHtml(testEl, '<div>[1<span class="test"><span class="test"></span></span>2]</div>');
         applier.undoToRange(range);
@@ -636,7 +712,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Issue 148 (isAppliedToRange on range containing just an image)", function(t) {
-        var applier = rangy.createCssClassApplier("test");
+        var applier = rangy.createClassApplier("test");
         var testEl = document.getElementById("test");
 
         var range = createRangeInHtml(testEl, 'one [] two');
@@ -651,7 +727,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Apply elementAttributes", function(t) {
-        var applier = rangy.createCssClassApplier("test", {
+        var applier = rangy.createClassApplier("test", {
             elementAttributes: {
                 "data-test": "foo"
             }
@@ -663,7 +739,18 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Unapply simple", function(t) {
-        var applier = rangy.createCssClassApplier("test");
+        var applier = rangy.createClassApplier("test");
+        var testEl = document.getElementById("test");
+        var range = createRangeInHtml(testEl, '<div>1[<span class="test">2</span>]3</div>');
+        applier.undoToRange(range);
+        t.assertEquals('<div>1[2]3</div>', htmlAndRangeToString(testEl, range));
+    });
+
+    s.test("Unapply simple with any tag", function(t) {
+        var applier = rangy.createClassApplier("test", {
+            tagNames: ["*"]
+        });
+
         var testEl = document.getElementById("test");
         var range = createRangeInHtml(testEl, '<div>1[<span class="test">2</span>]3</div>');
         applier.undoToRange(range);
@@ -671,7 +758,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Unapply elementAttributes", function(t) {
-        var applier = rangy.createCssClassApplier("test", {
+        var applier = rangy.createClassApplier("test", {
             elementAttributes: {
                 "data-test": "foo"
             }
@@ -683,7 +770,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Merge error (issue 176)", function(t) {
-        var applier = rangy.createCssClassApplier("one");
+        var applier = rangy.createClassApplier("one");
         var testEl = document.getElementById("test");
         testEl.innerHTML = '<span class="one"><span class="two"><span>a</span></span></span>b';
         var range = rangy.createRange();
@@ -693,7 +780,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("Apply with className element property (issue 177)", function(t) {
-        var applier = rangy.createCssClassApplier("test", {
+        var applier = rangy.createClassApplier("test", {
             elementProperties: {
                 "className": "foo"
             }
@@ -706,8 +793,8 @@ xn.test.suite("Class Applier module tests", function(s) {
 
     s.test("onElementCreate test", function(t) {
         var elementDataTest;
-        
-        var applier = rangy.createCssClassApplier("test", {
+
+        var applier = rangy.createClassApplier("test", {
             elementAttributes: {
                 "data-test": "foo"
             },
@@ -724,7 +811,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("removeEmptyContainers error (issue 188)", function(t) {
-        var applier = rangy.createCssClassApplier("test");
+        var applier = rangy.createClassApplier("test");
         var testEl = document.getElementById("test");
         testEl.innerHTML = '<span class="test"></span>';
         var range = rangy.createRange();
@@ -733,7 +820,7 @@ xn.test.suite("Class Applier module tests", function(s) {
     });
 
     s.test("removeEmptyContainers error undoToRange (issue 188)", function(t) {
-        var applier = rangy.createCssClassApplier("test");
+        var applier = rangy.createClassApplier("test");
         var testEl = document.getElementById("test");
         testEl.innerHTML = '1<span class="test"></span><span class="test">2</span><span class="test"></span>3';
         var range = rangy.createRange();
@@ -747,11 +834,125 @@ xn.test.suite("Class Applier module tests", function(s) {
         t.assertEquals(range.endOffset, 2);
     });
 
+    s.test("Apply class to empty elements (issue 83)", function(t) {
+        var applier = rangy.createClassApplier("test", {
+            tagNames: ["span", "br"]
+        });
+        var testEl = document.getElementById("test");
+        var range = createRangeInHtml(testEl, '1[2<br>3]4');
+        applier.applyToRange(range);
+        t.assertEquals('1<span class="test">[2</span><br class="test" /><span class="test">3]</span>4', htmlAndRangeToString(testEl, range));
+    });
+
+    s.test("Unapply class to empty elements (issue 83)", function(t) {
+        var applier = rangy.createClassApplier("test", {
+            tagNames: ["span", "br"]
+        });
+        var testEl = document.getElementById("test");
+        var range = createRangeInHtml(testEl, '1[2<br class="test">3]4');
+        applier.undoToRange(range);
+        t.assertEquals('1[2<br />3]4', htmlAndRangeToString(testEl, range));
+    });
+
+    s.test("Avoid style, script and textarea elements (issue 281)", function(t) {
+        var applier = rangy.createClassApplier("test");
+        var testEl = document.getElementById("test");
+        var range = createRangeInHtml(testEl, '1[2<style>.cheese { color: yellow; }</style>3]4');
+        applier.applyToRange(range);
+        t.assertEquals('1<span class="test">[2</span><style>.cheese { color: yellow; }</style><span class="test">3]</span>4', htmlAndRangeToString(testEl, range));
+    });
+
+    if (document.createElementNS) {
+/*
+        s.test("Apply ignores non-HTML elements (issue #178)", function(t) {
+            var applier = rangy.createClassApplier("test");
+            var testEl = document.getElementById("test");
+            var customElement = document.createElementNS('my:custom:ns', 'span');
+            customElement.appendChild(document.createTextNode('b'));
+            testEl.appendChild(customElement);
+            var range = rangy.createRange();
+            range.selectNode(testEl);
+            applier.applyToRange(range);
+            t.assertEquals(testEl.childNodes.length, 1);
+            t.assertEquals(testEl.firstChild, customElement);
+            t.assertEquals(testEl.firstChild.childNodes.length, 1);
+            // Some browsers don't put a valid innerHTML on custom namespaced elements
+            if (rangy.util.isHostProperty(testEl.firstChild.firstChild, "outerHTML")) {
+                t.assertEquals(testEl.firstChild.firstChild.outerHTML, '<span class="test">b</span>');
+            }
+        });
+
+        s.test("Unapply ignores non-HTML elements (issue #178)", function(t) {
+            var applier = rangy.createClassApplier("test");
+            var testEl = document.getElementById("test");
+            var customElement = document.createElementNS('my:custom:ns', 'span');
+            // Make the custom element look somewhat like a HTML element
+            customElement.setAttribute("class", "test");
+            customElement.appendChild(document.createTextNode('b'));
+            testEl.appendChild(customElement);
+            var range = rangy.createRange();
+            range.selectNode(testEl);
+            applier.undoToRange(range);
+            t.assertEquals(testEl.childNodes.length, 1);
+            console.dir(testEl.firstChild)
+            t.assertEquals(testEl.firstChild, customElement);
+            t.assertEquals(testEl.firstChild.childNodes.length, 1);
+            t.assertEquals(testEl.firstChild.firstChild.nodeType, 3 */
+/*Node.TEXT_NODE*//*
+);
+            t.assertEquals(testEl.firstChild.firstChild.textContent, "b");
+        });
+
+        s.test("removeEmptyContainers ignores non-HTML elements (issue #178)", function(t) {
+            var applier = rangy.createClassApplier("test");
+            var testEl = document.getElementById("test");
+            var customElement = document.createElementNS('my:custom:ns', 'span');
+            // Make the custom element look somewhat like a HTML element
+            customElement.setAttribute("class", "test");
+            testEl.appendChild(customElement);
+            var range = rangy.createRange();
+            range.selectNode(testEl);
+            applier.applyToRange(range);
+            t.assertEquals(testEl.childNodes.length, 1);
+            t.assertEquals(testEl.firstChild, customElement);
+        });
+
+        s.test("Merging ignores non-HTML elements (issue #178)", function(t) {
+            var applier = rangy.createClassApplier("test");
+            var testEl = document.getElementById("test");
+            testEl.innerHTML = "a";
+            var customElement = document.createElementNS('my:custom:ns', 'span');
+            // Make the custom element look somewhat like a HTML element
+            customElement.setAttribute("class", "test");
+            customElement.appendChild(document.createTextNode('b'));
+            testEl.appendChild(customElement);
+            var range = rangy.createRange();
+            range.selectNode(testEl);
+            applier.applyToRange(range);
+            t.assertEquals(testEl.childNodes.length, 2);
+            t.assertEquals(testEl.childNodes[0].outerHTML, '<span class="test">a</span>');
+            t.assertEquals(testEl.childNodes[1], customElement);
+        });
+*/
+
+        s.test("<svg> element support", function(t) {
+            var applier = rangy.createClassApplier("test", {
+                elementTagName: "tspan"
+            });
+            var testEl = document.getElementById("test");
+            var range = createRangeInHtml(testEl, '<svg><text>1[2]3</text></svg>');
+            applier.applyToRange(range);
+            t.assertEquals('<svg><text>1<tspan class="test">[2]</tspan>3</text></svg>', htmlAndRangeToString(testEl, range));
+            applier.undoToRange(range);
+            t.assertEquals('<svg><text>1[2]3</text></svg>', htmlAndRangeToString(testEl, range));
+        });
+    }
+
     if (rangy.features.selectionSupportsMultipleRanges) {
         s.test("Undo to multiple ranges", function(t) {
             var testEl = document.getElementById("test");
             testEl.innerHTML = "<b>12</b>345";
-            var applier = rangy.createCssClassApplier("c1");
+            var applier = rangy.createClassApplier("c1");
 
             var textNode1 = testEl.firstChild.firstChild;
             var textNode2 = testEl.lastChild;
@@ -779,7 +980,7 @@ xn.test.suite("Class Applier module tests", function(s) {
         s.test("Undo to multiple ranges reverse order", function(t) {
             var testEl = document.getElementById("test");
             testEl.innerHTML = "<b>12</b>345";
-            var applier = rangy.createCssClassApplier("c1");
+            var applier = rangy.createClassApplier("c1");
 
             var textNode1 = testEl.firstChild.firstChild;
             var textNode2 = testEl.lastChild;

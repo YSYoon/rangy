@@ -30,7 +30,6 @@ function testRangeCreator(docs, docName, rangeCreator, rangeCreatorName) {
     xn.test.suite(rangeCreatorName + " in " + docName + " document", function(s) {
         var doc;
         var DOMException = rangy.DOMException;
-        var RangeException = rangy.RangeException;
         var testRange = rangeCreator(document);
 
         s.setUp = function(t) {
@@ -78,7 +77,7 @@ function testRangeCreator(docs, docName, rangeCreator, rangeCreatorName) {
                 range.selectNodeContents(t.nodes.plainText);
                 t.assert(range.isValid());
                 t.nodes.plainText.parentNode.removeChild(t.nodes.plainText);
-                t.assertFalse(range.isValid());
+                t.assert(range.isValid());
             });
 
             s.test("isValid: remove start container node", function(t) {
@@ -180,9 +179,10 @@ function testRangeCreator(docs, docName, rangeCreator, rangeCreatorName) {
 
                 range.detach();
 
-                testExceptionCode(t, function() {
+                // Detach is now a no-op  according to DOM4. Not according to Chrome 35 though.
+                t.assertNoError(function() {
                     range[methodName](t.nodes.div2, 0);
-                }, DOMException.prototype.INVALID_STATE_ERR);
+                });
             });
 
             s.test(methodName + " move to other document test", function(t) {
@@ -205,17 +205,18 @@ function testRangeCreator(docs, docName, rangeCreator, rangeCreatorName) {
 
                 testExceptionCode(t, function() {
                     range[methodName](doc);
-                }, RangeException.prototype.INVALID_NODE_TYPE_ERR);
+                }, DOMException.prototype.INVALID_NODE_TYPE_ERR);
 
                 testExceptionCode(t, function() {
                     range[methodName](doc.createDocumentFragment());
-                }, RangeException.prototype.INVALID_NODE_TYPE_ERR);
+                }, DOMException.prototype.INVALID_NODE_TYPE_ERR);
 
                 range.detach();
 
-                testExceptionCode(t, function() {
+                // Detach is now a no-op  according to DOM4. Not according to Chrome 35 though.
+                t.assertNoError(function() {
                     range[methodName](t.nodes.div2);
-                }, DOMException.prototype.INVALID_STATE_ERR);
+                });
             });
         };
 
@@ -300,6 +301,19 @@ function testRangeCreator(docs, docName, rangeCreator, rangeCreatorName) {
         });
 
         s.test("extractContents in single text node", function(t) {
+            var range = rangeCreator(doc);
+            t.nodes.div.innerHTML = "<p>1 2 <span>3</span> 4 5</p>";
+            var p = t.nodes.div.firstChild;
+            range.setStart(p.firstChild, 2);
+            range.setEnd(p.lastChild, 2);
+            var frag = range.extractContents();
+            var container = doc.createElement("div");
+            container.appendChild(frag);
+            t.assertEquals(container.innerHTML, "2 <span>3</span> 4");
+            t.assertEquals(t.nodes.div.innerHTML, "<p>1  5</p>");
+        });
+
+        s.test("extractContents inside paragraph (issue 163)", function(t) {
             var range = rangeCreator(doc);
             range.setStart(t.nodes.plainText, 1);
             range.setEnd(t.nodes.plainText, 2);
@@ -478,8 +492,10 @@ function testRangeCreator(docs, docName, rangeCreator, rangeCreatorName) {
                 var range = rangeCreator(doc);
                 range.setStartBefore(t.nodes.b);
                 range.collapse(true);
-                t.assert(range.intersectsNode(t.nodes.b, true));
-                t.assertFalse(range.intersectsNode(t.nodes.b, false));
+                if (range.intersectsNode.length == 2) {
+                    t.assert(range.intersectsNode(t.nodes.b, true));
+                }
+                t.assertFalse(range.intersectsNode(t.nodes.b));
             });
 
             s.test("intersectsNode 3", function(t) {
@@ -497,6 +513,49 @@ function testRangeCreator(docs, docName, rangeCreator, rangeCreatorName) {
                 t.assert(range.intersectsNode(t.nodes.boldText));
                 t.assertFalse(range.intersectsNode(t.nodes.boldAndItalicText));
             });
+
+            s.test("intersectsNode orphan node", function(t) {
+                var range = rangeCreator(doc);
+                var node = doc.createElement("div");
+                node.appendChild(doc.createTextNode("test"));
+                range.selectNodeContents(node);
+                t.assert(range.intersectsNode(node));
+                t.assertFalse(range.intersectsNode(t.nodes.boldText));
+            });
+
+            s.test("intersectsNode test boundary at end of text node", function(t) {
+                var range = rangeCreator(doc);
+                range.setStart(t.nodes.plainText, t.nodes.plainText.length);
+                range.setEnd(t.nodes.boldText, 1);
+                t.assert(range.intersectsNode(t.nodes.plainText));
+            });
+
+            s.test("intersectsNode test touching is not intersecting", function(t) {
+                var range = rangeCreator(doc);
+                range.setStartAfter(t.nodes.plainText);
+                range.setEnd(t.nodes.boldText, 1);
+                t.assertFalse(range.intersectsNode(t.nodes.plainText));
+            });
+
+            if (testRange.intersectsNode.length == 2) {
+                s.test("intersectsNode touching is intersecting at start", function(t) {
+                    var range = rangeCreator(doc);
+                    range.setStart(t.nodes.plainText, 0);
+                    range.setEndBefore(t.nodes.boldText);
+                    t.assertFalse(range.intersectsNode(t.nodes.boldText));
+                    t.assertFalse(range.intersectsNode(t.nodes.boldText, false));
+                    t.assert(range.intersectsNode(t.nodes.boldText, true));
+                });
+
+                s.test("intersectsNode touching is intersecting at end", function(t) {
+                    var range = rangeCreator(doc);
+                    range.setStartAfter(t.nodes.plainText);
+                    range.setEnd(t.nodes.boldText, 1);
+                    t.assertFalse(range.intersectsNode(t.nodes.plainText));
+                    t.assertFalse(range.intersectsNode(t.nodes.plainText, false));
+                    t.assert(range.intersectsNode(t.nodes.plainText, true));
+                });
+            }
         }
 
         if (testRange.intersection) {
@@ -653,7 +712,7 @@ function testRangeCreator(docs, docName, rangeCreator, rangeCreatorName) {
                 }
                 return text;
             }
-            
+
             s.test("Concatenate getNodes([3]) after splitBoundaries same as toString - simple", function(t) {
                 var range = rangeCreator(doc);
                 range.setStartAndEnd(t.nodes.plainText, 1, t.nodes.boldText, 3);
@@ -735,9 +794,9 @@ function testRangeCreator(docs, docName, rangeCreator, rangeCreatorName) {
                 range.normalizeBoundaries();
                 t.assertEquals(1, b.childNodes.length);
                 t.assertEquals("onetwo", b.childNodes[0].data);
-                t.assertEquals(text2, b.childNodes[0]);
-                t.assertEquals(text2, range.startContainer);
-                t.assertEquals(text2, range.endContainer);
+                t.assertEquals(text1, b.childNodes[0]);
+                t.assertEquals(text1, range.startContainer);
+                t.assertEquals(text1, range.endContainer);
                 t.assertEquals(3, range.startOffset);
                 t.assertEquals(3, range.endOffset);
                 t.assert(range.collapsed);
@@ -1027,6 +1086,127 @@ function testRangeCreator(docs, docName, rangeCreator, rangeCreatorName) {
                 t.assertEquals(3, range.startOffset);
                 t.assertEquals(2, range.endOffset);
             });
+
+            s.test("normalizeBoundaries when collapsed range is at end of text node that is immediately followed by another", function(t) {
+                var range = rangeCreator(doc);
+                var b = t.nodes.b;
+                b.innerHTML = "";
+                var text1 = b.appendChild( doc.createTextNode("one") );
+                var text2 = b.appendChild( doc.createTextNode("two") );
+                range.setStartAndEnd(text1, 3);
+                range.normalizeBoundaries();
+                t.assertEquals(text1.data, "onetwo");
+                t.assertEquals(range.startContainer, text1);
+                t.assertEquals(range.startOffset, 3);
+                t.assertEquals(range.endContainer, text1);
+                t.assertEquals(range.endOffset, 3);
+            });
+
+            s.test("normalizeBoundaries when collapsed range is between two text nodes", function(t) {
+                var range = rangeCreator(doc);
+                var b = t.nodes.b;
+                b.innerHTML = "";
+                var text1 = b.appendChild( doc.createTextNode("one") );
+                var text2 = b.appendChild( doc.createTextNode("two") );
+                range.setStartAndEnd(b, 1);
+                range.normalizeBoundaries();
+                t.assertEquals(text1.data, "onetwo");
+                t.assertEquals(range.startContainer, text1);
+                t.assertEquals(range.startOffset, 3);
+                t.assertEquals(range.endContainer, text1);
+                t.assertEquals(range.endOffset, 3);
+            });
+
+
+            s.test("normalizeBoundaries when the end of an uncollapsed range is at end of text node that is immediately followed by another", function(t) {
+                var range = rangeCreator(doc);
+                var b = t.nodes.b;
+                b.innerHTML = "";
+                var text1 = b.appendChild( doc.createTextNode("one") );
+                var text2 = b.appendChild( doc.createTextNode("two") );
+                range.setStartAndEnd(text1, 2, text1, 3);
+                range.normalizeBoundaries();
+                t.assertEquals(text1.data, "onetwo");
+                t.assertEquals(range.startContainer, text1);
+                t.assertEquals(range.startOffset, 2);
+                t.assertEquals(range.endContainer, text1);
+                t.assertEquals(range.endOffset, 3);
+            });
+
+            s.test("normalizeBoundaries when the end of an uncollapsed range is between two text nodes", function(t) {
+                var range = rangeCreator(doc);
+                var b = t.nodes.b;
+                b.innerHTML = "";
+                var text1 = b.appendChild( doc.createTextNode("one") );
+                var text2 = b.appendChild( doc.createTextNode("two") );
+                range.setStartAndEnd(text1, 2, b, 1);
+                range.normalizeBoundaries();
+                t.assertEquals(text1.data, "onetwo");
+                t.assertEquals(range.startContainer, text1);
+                t.assertEquals(range.startOffset, 2);
+                t.assertEquals(range.endContainer, text1);
+                t.assertEquals(range.endOffset, 3);
+            });
+
+            s.test("normalizeBoundaries when the start of an uncollapsed range is between two text nodes", function(t) {
+                var range = rangeCreator(doc);
+                var b = t.nodes.b;
+                b.innerHTML = "";
+                var text1 = b.appendChild( doc.createTextNode("one") );
+                var text2 = b.appendChild( doc.createTextNode("two") );
+                range.setStartAndEnd(b, 1, text2, 1);
+                range.normalizeBoundaries();
+                t.assertEquals(text2.data, "onetwo");
+                t.assertEquals(range.startContainer, text2);
+                t.assertEquals(range.startOffset, 3);
+                t.assertEquals(range.endContainer, text2);
+                t.assertEquals(range.endOffset, 4);
+            });
+
+            s.test("normalizeBoundaries when the start of an uncollapsed range is at start of text node that is immediately preceded by another", function(t) {
+                var range = rangeCreator(doc);
+                var b = t.nodes.b;
+                b.innerHTML = "";
+                var text1 = b.appendChild( doc.createTextNode("one") );
+                var text2 = b.appendChild( doc.createTextNode("two") );
+                range.setStartAndEnd(b, 1, text2, 1);
+                range.normalizeBoundaries();
+                t.assertEquals(text2.data, "onetwo");
+                t.assertEquals(range.startContainer, text2);
+                t.assertEquals(range.startOffset, 3);
+                t.assertEquals(range.endContainer, text2);
+                t.assertEquals(range.endOffset, 4);
+            });
+
+            s.test("normalizeBoundaries when the start of an uncollapsed range is at end of text node that is immediately followed by another", function(t) {
+                var range = rangeCreator(doc);
+                var b = t.nodes.b;
+                b.innerHTML = "";
+                var text1 = b.appendChild( doc.createTextNode("one") );
+                var text2 = b.appendChild( doc.createTextNode("two") );
+                range.setStartAndEnd(text1, 3, text2, 1);
+                range.normalizeBoundaries();
+                t.assertEquals(text1.data, "onetwo");
+                t.assertEquals(range.startContainer, text1);
+                t.assertEquals(range.startOffset, 3);
+                t.assertEquals(range.endContainer, text1);
+                t.assertEquals(range.endOffset, 4);
+            });
+
+            s.test("normalizeBoundaries when the end of an uncollapsed range is at start of text node that is immediately preceded by another", function(t) {
+                var range = rangeCreator(doc);
+                var b = t.nodes.b;
+                b.innerHTML = "";
+                var text1 = b.appendChild( doc.createTextNode("one") );
+                var text2 = b.appendChild( doc.createTextNode("two") );
+                range.setStartAndEnd(text1, 2, text2, 0);
+                range.normalizeBoundaries();
+                t.assertEquals(text1.data, "onetwo");
+                t.assertEquals(range.startContainer, text1);
+                t.assertEquals(range.startOffset, 2);
+                t.assertEquals(range.endContainer, text1);
+                t.assertEquals(range.endOffset, 3);
+            });
         }
 
         if (testRange.createContextualFragment) {
@@ -1086,8 +1266,6 @@ function testRangeCreator(docs, docName, rangeCreator, rangeCreatorName) {
                 t.assertFalse(range2.containsRange(range1));
             });
         }
-
-        testRange.detach();
     }, false);
 }
 
@@ -1176,13 +1354,16 @@ function testAcid3(rangeCreator, rangeCreatorName) {
                 r.setEndBefore(doc);
                 msg = "no exception thrown for setEndBefore() the document itself";
             } catch (e) {
+                /*
+                This section is now commented out in 2011 Acid3 update
+
                 if (e.BAD_BOUNDARYPOINTS_ERR != 1)
                   msg = 'not a RangeException';
                 else if (e.INVALID_NODE_TYPE_ERR != 2)
                   msg = 'RangeException has no INVALID_NODE_TYPE_ERR';
                 else if ("INVALID_ACCESS_ERR" in e)
                   msg = 'RangeException has DOMException constants';
-                else if (e.code != e.INVALID_NODE_TYPE_ERR)
+                else*/ if (e.code != e.INVALID_NODE_TYPE_ERR)
                   msg = 'wrong exception raised from setEndBefore()';
             }
             t.assert(msg == "", msg);
@@ -1269,6 +1450,8 @@ function testAcid3(rangeCreator, rangeCreatorName) {
 
         s.test("Acid3 test 10: Ranges and Attribute Nodes", function(t) {
             // test 10: Ranges and Attribute Nodes
+            // COMMENTED OUT FOR 2011 UPDATE - turns out instead of dropping Attr entirely, as Acid3 originally expected, the API is just being refactored
+            /*
             var e = document.getElementById('test');
             if (!e.getAttributeNode) {
                 return; // support for attribute nodes is optional in Acid3, because attribute nodes might be removed from DOM Core in the future.
@@ -1286,6 +1469,7 @@ function testAcid3(rangeCreator, rangeCreatorName) {
             t.assertEquals(r.toString(), '', "extracting contents didn't empty attribute value; instead equals '" + r.toString() + "'");
             t.assertEquals(e.getAttribute('id'), '', "extracting contents didn't change 'id' attribute to empty string");
             e.id = 'test';
+            */
         });
 
         s.test("Acid3 test 11: Ranges and Comments", function(t) {
@@ -1316,8 +1500,9 @@ function testAcid3(rangeCreator, rangeCreatorName) {
                 r.surroundContents(doc.createElement('a'));
                 msg = 'no exception raised';
             } catch (e) {
-                if ('code' in e) msg += '; code = ' + e.code;
-                if (e.code == 1) msg = '';
+                // COMMENTED OUT FOR 2011 UPDATE - DOM Core changes the exception from RangeException.BAD_BOUNDARYPOINTS_ERR (1) to DOMException.INVALID_STATE_ERR (11)
+                /*if ('code' in e) msg += '; code = ' + e.code;
+                if (e.code == 1) */msg = '';
             }
             t.assert(msg == '', "when trying to surround two halves of comment: " + msg);
             t.assertEquals(r.toString(), "", "comments returned text");
